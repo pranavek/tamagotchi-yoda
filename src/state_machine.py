@@ -20,10 +20,11 @@ DEFAULT_STATE: dict[str, Any] = {
     "last_tick": None,
     "quote_visible": False,
     "quote_text": None,
-    "quote_remaining_ticks": 0,
     "sprite_variant": "idle",
     "full_refresh_due": True,
     "next_interval": config.MIN_TICK_INTERVAL,
+    "pose_dx": 0,
+    "pose_dy": 0,
 }
 
 
@@ -56,19 +57,20 @@ class YodaState:
         d["ticks"] += 1
         d["last_tick"] = datetime.now().isoformat(timespec="seconds")
 
-        if d["quote_visible"]:
-            d["quote_remaining_ticks"] -= 1
-            if d["quote_remaining_ticks"] <= 0:
-                d["quote_visible"] = False
-                d["quote_text"] = None
-                d["sprite_variant"] = "idle"
-        elif random.random() < config.QUOTE_CHANCE:
+        # Every tick rolls for a new quote. A successful roll replaces whatever
+        # is currently shown; an unsuccessful roll leaves the existing quote
+        # (if any) untouched — quotes only ever leave when a fresh one arrives.
+        if random.random() < config.QUOTE_CHANCE:
             d["quote_visible"] = True
             d["quote_text"] = select_quote()
-            d["quote_remaining_ticks"] = config.QUOTE_DISPLAY_TICKS
             d["sprite_variant"] = "perked"
         else:
             d["sprite_variant"] = "blink" if random.random() < 0.2 else "idle"
+
+        # Subtle drift: ±1 px random walk on each axis, clamped to ±POSE_DRIFT_MAX.
+        limit = config.POSE_DRIFT_MAX
+        d["pose_dx"] = max(-limit, min(limit, d["pose_dx"] + random.choice([-1, 0, 1])))
+        d["pose_dy"] = max(-limit, min(limit, d["pose_dy"] + random.choice([-1, 0, 1])))
 
         if d["ticks"] % config.FULL_REFRESH_EVERY_N_TICKS == 0:
             d["full_refresh_due"] = True

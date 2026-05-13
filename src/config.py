@@ -25,11 +25,17 @@ ROTATE_180 = True
 DEBUG_DUMP_PNG = True
 
 # ---- Timing (seconds) -------------------------------------------------------
-MIN_TICK_INTERVAL = 600        # 10 minutes
-MAX_TICK_INTERVAL = 2700       # 45 minutes
-QUOTE_CHANCE = 0.15            # 15% probability per tick
-QUOTE_DISPLAY_TICKS = 3        # quote stays for 3 wake cycles before clearing
+# ~10 min between ticks with a small jitter so the cadence doesn't feel robotic.
+MIN_TICK_INTERVAL = 540        # 9 minutes
+MAX_TICK_INTERVAL = 660        # 11 minutes
+QUOTE_CHANCE = 0.15            # per-tick chance of a NEW quote replacing the current one
 FULL_REFRESH_EVERY_N_TICKS = 10  # anti-ghosting forced full refresh cadence
+
+# ---- Subtle motion ----------------------------------------------------------
+# Yoda gently sways: each tick the pose offset random-walks by ±1 px in each
+# axis, clamped to ±POSE_DRIFT_MAX. Keeps him alive-looking without ever
+# leaving his neighbourhood on the canvas.
+POSE_DRIFT_MAX = 2
 
 # ---- Sprite layout (pixels, on the 250x122 canvas) --------------------------
 YODA_WIDTH = 45

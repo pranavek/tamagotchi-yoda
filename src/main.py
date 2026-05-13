@@ -63,7 +63,9 @@ def _draw_bubble(canvas: Image.Image, text: str, font) -> None:
 
 def render_frame(state: YodaState, yoda: YodaSprite, font) -> Image.Image:
     canvas = Image.new("1", (config.EPD_WIDTH, config.EPD_HEIGHT), 255)
-    yoda.blit(canvas, config.YODA_X, config.YODA_Y, state.data["sprite_variant"])
+    x = config.YODA_X + state.data.get("pose_dx", 0)
+    y = config.YODA_Y + state.data.get("pose_dy", 0)
+    yoda.blit(canvas, x, y, state.data["sprite_variant"])
     if state.data["quote_visible"] and state.data["quote_text"]:
         _draw_bubble(canvas, state.data["quote_text"], font)
     return canvas

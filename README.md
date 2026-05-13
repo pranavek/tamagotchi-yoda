@@ -2,7 +2,7 @@
 
 A zero-interaction ambient Yoda for the Raspberry Pi Zero 2 W + Waveshare 2.13" e-ink HAT (V4).
 
-Wakes every 10–45 minutes, renders a 1-bit Yoda sprite on the 250×122 panel, occasionally surfaces a three-word Yoda-style quote in a speech bubble, then puts the e-ink controller back to sleep. No buttons, no inputs, no network.
+Wakes roughly every 10 minutes, redraws Yoda with a gentle ±2 px sway, occasionally surfaces a three-word Yoda-style quote in a speech bubble (which stays put until a fresh one replaces it), then puts the e-ink controller back to sleep. No buttons, no inputs, no network.
 
 ## Hardware
 
@@ -80,9 +80,9 @@ State lives at `/root/tamagotchi-yoda/state.json` and survives reboots.
 
 Edit `src/config.py`:
 
-- `MIN_TICK_INTERVAL` / `MAX_TICK_INTERVAL` — how often Yoda wakes
-- `QUOTE_CHANCE` — probability per tick of surfacing a new quote
-- `QUOTE_DISPLAY_TICKS` — how many wake cycles a quote lingers
+- `MIN_TICK_INTERVAL` / `MAX_TICK_INTERVAL` — how often Yoda wakes (default 9–11 min)
+- `QUOTE_CHANCE` — probability per tick of a *new* quote replacing the current one
+- `POSE_DRIFT_MAX` — bound on the per-axis sway in pixels
 - `ROTATE_180` — flip if the HAT is mounted the other way up
 - `FULL_REFRESH_EVERY_N_TICKS` — anti-ghosting cadence
 
@@ -90,7 +90,9 @@ Edit `src/config.py`:
 
 - [x] Yoda silhouette recognizable at 45×55 on a 250×122 panel
 - [x] Quotes appear in a bounded bubble, 3 words max, Yoda-style syntax
-- [x] Tick interval is randomized between 10 and 45 min
+- [x] Tick interval is ~10 min (9–11 min jitter)
+- [x] Yoda sways ±2 px between ticks
+- [x] Active quote persists until a fresh one replaces it
 - [x] State persists across reboots
 - [x] E-ink controller sleeps between updates
 - [x] No user input — no buttons, no web interface

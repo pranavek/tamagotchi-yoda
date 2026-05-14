@@ -21,7 +21,7 @@ from .elements import apply_xp, code_to_element, dominant
 from .lifecycle import stage_for
 from .market import market_mood
 from .observations import observe
-from .wisdom import select_wisdom
+from .wisdom import select_phrase
 
 
 log = logging.getLogger(__name__)
@@ -49,7 +49,7 @@ DEFAULT_STATE: dict[str, Any] = {
     "event_state": None,      # populated by events.default_event_state() on first load
     "observation_visible": False,
     "observation_text": None,
-    "wisdom_text": None,      # longer motivational line under the bubble
+    "phrase_text": None,      # generic 3-word Yoda phrase pinned to line 3
 
     "last_market": None,
     "last_market_at": None,
@@ -265,8 +265,8 @@ class YodaState:
             d["observation_text"] = text
             d["_just_observed"] = True
 
-        # Rotate the motivational wisdom panel on every fetch.
-        d["wisdom_text"] = select_wisdom()
+        # Rotate the line-3 phrase on every fetch.
+        d["phrase_text"] = select_phrase()
 
     # --------------------------------------------------------------- market
 
@@ -321,8 +321,8 @@ class YodaState:
                 d["observation_text"] = text
                 d["_just_observed"] = True
 
-        # Rotate wisdom regardless of who picked the quote.
-        d["wisdom_text"] = select_wisdom()
+        # Rotate the line-3 phrase regardless of who picked the bubble quote.
+        d["phrase_text"] = select_phrase()
 
     # -------------------------------------------------------- conveniences
 

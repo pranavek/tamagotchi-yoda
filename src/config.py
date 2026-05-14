@@ -58,14 +58,12 @@ STATUS_BAR_H = 14
 STAT_CELL_W = 52
 ELEMENT_GLYPH_X = 232
 
-# ---- Wisdom panel (below the bubble) ---------------------------------------
-# Rotating motivational line; updated on every weather / market fetch.
-WISDOM_X = 100
-WISDOM_Y = 62
-WISDOM_W = 132
-WISDOM_LINE_HEIGHT = 12
-WISDOM_MAX_CHARS_PER_LINE = 22
-WISDOM_MAX_LINES = 2
+# ---- Line-3 phrase (below the bubble) --------------------------------------
+# Generic 3-word Yoda phrase, refreshed on every weather / market fetch.
+# Positioned at "line 3" of the four-line zone under the bubble so it sits
+# centred-ish between the bubble's bottom edge and the banner.
+PHRASE_X = 102
+PHRASE_Y = 86
 
 # ---- Bottom banner (life stage / events) -----------------------------------
 BANNER_Y = 112

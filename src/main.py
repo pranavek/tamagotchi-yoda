@@ -12,10 +12,13 @@ import time
 
 from PIL import Image, ImageDraw, ImageFont
 
-from . import config
+from . import config, events
 from .display import Display
+from .elements import ELEMENT_GLYPH
+from .lifecycle import STAGE_SCALE
 from .sprite import YodaSprite
 from .state_machine import YodaState
+from .weather import fetch_current
 
 
 logging.basicConfig(
@@ -25,33 +28,57 @@ logging.basicConfig(
 log = logging.getLogger("yoda")
 
 
+_STAT_ICONS = ("H", "*", "+", "Z")  # hunger / happiness / health / energy
+_STAT_KEYS = ("hunger", "happiness", "health", "energy")
+
+
+def _draw_status_bar(canvas: Image.Image, state: YodaState, font) -> None:
+    draw = ImageDraw.Draw(canvas)
+    y = config.STATUS_BAR_Y
+    h = config.STATUS_BAR_H
+    cell_w = config.STAT_CELL_W
+
+    for i, (icon, key) in enumerate(zip(_STAT_ICONS, _STAT_KEYS)):
+        x0 = i * cell_w
+        # Icon column.
+        draw.text((x0 + 1, y), icon, font=font, fill=0)
+        # Bar.
+        bar_x0 = x0 + 10
+        bar_x1 = x0 + cell_w - 4
+        draw.rectangle((bar_x0, y + 3, bar_x1, y + h - 4), outline=0, fill=255)
+        v = max(0.0, min(100.0, float(state.data["stats"].get(key, 0))))
+        fill_w = int((bar_x1 - bar_x0 - 1) * v / 100.0)
+        if fill_w > 0:
+            draw.rectangle(
+                (bar_x0 + 1, y + 4, bar_x0 + 1 + fill_w, y + h - 5), fill=0
+            )
+
+    # Element glyph in the top-right.
+    elem = state.dominant_element
+    glyph = ELEMENT_GLYPH.get(elem, "?")
+    gx = config.ELEMENT_GLYPH_X
+    draw.rectangle((gx, y, gx + 14, y + h - 2), outline=0, fill=255)
+    draw.text((gx + 4, y + 1), glyph, font=font, fill=0)
+
+    # Faint baseline under the status bar.
+    draw.line((0, y + h, config.EPD_WIDTH, y + h), fill=0)
+
+
 def _draw_bubble(canvas: Image.Image, text: str, font) -> None:
     draw = ImageDraw.Draw(canvas)
     x, y = config.BUBBLE_X, config.BUBBLE_Y
     w, h = config.BUBBLE_W, config.BUBBLE_H
-    radius = 8
 
-    # Bubble body — rounded white rectangle with a black outline.
+    # Thought-trail dots first so the bubble outline draws over them cleanly.
+    for cx, cy, r in config.BUBBLE_DOTS:
+        draw.ellipse((cx - r, cy - r, cx + r, cy + r), outline=0, fill=255)
+
     if hasattr(draw, "rounded_rectangle"):
         draw.rounded_rectangle(
-            (x, y, x + w, y + h), radius=radius, outline=0, fill=255, width=1
+            (x, y, x + w, y + h), radius=8, outline=0, fill=255, width=1
         )
     else:
         draw.rectangle((x, y, x + w, y + h), outline=0, fill=255, width=1)
-
-    # Tail — small triangle pointing down toward Yoda's head.
-    tx, ty = config.BUBBLE_TAIL_TARGET
-    tail_anchor_x = x + 12
-    tail_anchor_y = y + h
-    draw.polygon(
-        [
-            (tail_anchor_x, tail_anchor_y - 1),
-            (tail_anchor_x + 8, tail_anchor_y - 1),
-            (tx, ty),
-        ],
-        fill=255,
-        outline=0,
-    )
 
     draw.text(
         (x + config.BUBBLE_TEXT_X_PAD, y + config.BUBBLE_TEXT_Y_PAD),
@@ -61,13 +88,39 @@ def _draw_bubble(canvas: Image.Image, text: str, font) -> None:
     )
 
 
+def _draw_banner(canvas: Image.Image, state: YodaState, font) -> None:
+    draw = ImageDraw.Draw(canvas)
+    stage = state.data.get("stage", "egg")
+    elem = state.dominant_element
+    event_str = events.banner(state.data["event_state"].get("active", []))
+
+    parts = [stage.upper(), elem.title()]
+    if event_str:
+        parts.append(event_str)
+    if state.data.get("dead"):
+        parts = ["GONE", f"({state.data.get('death_reason') or '?'})"]
+
+    text = "  ".join(parts)
+    draw.line((0, config.BANNER_Y - 1, config.EPD_WIDTH, config.BANNER_Y - 1), fill=0)
+    draw.text((2, config.BANNER_Y), text, font=font, fill=0)
+
+
 def render_frame(state: YodaState, yoda: YodaSprite, font) -> Image.Image:
     canvas = Image.new("1", (config.EPD_WIDTH, config.EPD_HEIGHT), 255)
+
+    _draw_status_bar(canvas, state, font)
+
+    stage = state.data.get("stage", "egg")
+    variant = "egg" if stage == "egg" else state.data["sprite_variant"]
+    scale = STAGE_SCALE.get(stage, 1.0)
     x = config.YODA_X + state.data.get("pose_dx", 0)
     y = config.YODA_Y + state.data.get("pose_dy", 0)
-    yoda.blit(canvas, x, y, state.data["sprite_variant"])
-    if state.data["quote_visible"] and state.data["quote_text"]:
-        _draw_bubble(canvas, state.data["quote_text"], font)
+    yoda.blit_scaled(canvas, x, y, variant, scale)
+
+    if state.data["observation_visible"] and state.data["observation_text"]:
+        _draw_bubble(canvas, state.data["observation_text"], font)
+
+    _draw_banner(canvas, state, font)
     return canvas
 
 
@@ -90,9 +143,13 @@ def main() -> None:
     signal.signal(signal.SIGTERM, _shutdown)
     signal.signal(signal.SIGINT, _shutdown)
 
-    log.info("boot tick=%d quote_visible=%s", state.data["ticks"], state.data["quote_visible"])
+    log.info(
+        "boot tick=%d stage=%s dominant=%s",
+        state.data["ticks"],
+        state.data.get("stage"),
+        state.dominant_element,
+    )
 
-    # First frame on boot — always full-refresh, then sleep.
     img = render_frame(state, yoda, font)
     display.full_refresh(img)
     state.data["full_refresh_due"] = False
@@ -104,17 +161,20 @@ def main() -> None:
         log.info("sleeping %d s until next tick", interval)
         time.sleep(interval)
 
-        state.tick()
+        state.tick(fetch_weather=fetch_current)
         img = render_frame(state, yoda, font)
         display.full_refresh(img)
         if state.data["full_refresh_due"]:
             state.data["full_refresh_due"] = False
             state.save()
         log.info(
-            "tick=%d variant=%s quote=%s",
+            "tick=%d stage=%s stats=%s dominant=%s events=%s obs=%r",
             state.data["ticks"],
-            state.data["sprite_variant"],
-            state.data["quote_text"],
+            state.data.get("stage"),
+            {k: round(state.data["stats"][k], 1) for k in _STAT_KEYS},
+            state.dominant_element,
+            state.data["event_state"].get("active"),
+            state.data.get("observation_text"),
         )
         display.sleep()
 

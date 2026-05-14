@@ -25,33 +25,61 @@ ROTATE_180 = True
 DEBUG_DUMP_PNG = True
 
 # ---- Timing (seconds) -------------------------------------------------------
-# ~10 min between ticks with a small jitter so the cadence doesn't feel robotic.
 MIN_TICK_INTERVAL = 540        # 9 minutes
 MAX_TICK_INTERVAL = 660        # 11 minutes
-QUOTE_CHANCE = 0.15            # per-tick chance of a NEW quote replacing the current one
-FULL_REFRESH_EVERY_N_TICKS = 10  # anti-ghosting forced full refresh cadence
+QUOTE_CHANCE = 0.35            # chance per weather fetch that Yoda speaks about it
+FULL_REFRESH_EVERY_N_TICKS = 10
+WEATHER_FETCH_EVERY_N_TICKS = 6   # ~60 min between Open-Meteo calls
 
 # ---- Subtle motion ----------------------------------------------------------
-# Yoda gently sways: each tick the pose offset random-walks by ±1 px in each
-# axis, clamped to ±POSE_DRIFT_MAX. Keeps him alive-looking without ever
-# leaving his neighbourhood on the canvas.
 POSE_DRIFT_MAX = 2
 
 # ---- Sprite layout (pixels, on the 250x122 canvas) --------------------------
 YODA_WIDTH = 45
 YODA_HEIGHT = 55
-YODA_X = 20                    # left margin
-YODA_Y = 40                    # vertical bias
+YODA_X = 20
+YODA_Y = 50
 
 # ---- Speech bubble ----------------------------------------------------------
-BUBBLE_X = 90
+# A rounded rectangle with a chain of three tiny "thought" dots leading down
+# toward Yoda's head, instead of a fragile single-pixel pointer.
+BUBBLE_X = 100
 BUBBLE_Y = 20
-BUBBLE_W = 140
-BUBBLE_H = 40
-BUBBLE_TEXT_X_PAD = 8
-BUBBLE_TEXT_Y_PAD = 14
-# Tail of the bubble points down-left toward Yoda's head.
-BUBBLE_TAIL_TARGET = (75, 55)
+BUBBLE_W = 132
+BUBBLE_H = 34
+BUBBLE_TEXT_X_PAD = 7
+BUBBLE_TEXT_Y_PAD = 11
+# Dots are listed bubble-to-yoda. Each entry is (cx, cy, radius).
+BUBBLE_DOTS = ((92, 60, 3), (80, 70, 2), (70, 79, 1))
+
+# ---- Status bar (top edge) --------------------------------------------------
+STATUS_BAR_Y = 0
+STATUS_BAR_H = 14
+STAT_CELL_W = 52
+ELEMENT_GLYPH_X = 232
+
+# ---- Bottom banner (life stage / events) -----------------------------------
+BANNER_Y = 112
+
+# ---- Weather API ------------------------------------------------------------
+OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
+LATITUDE = 33.5207             # Birmingham, AL (spec example)
+LONGITUDE = -86.8025
+TIMEZONE = "America/Chicago"
+WEATHER_HTTP_TIMEOUT = 8
+
+# ---- Stat decay (per real-world hour) --------------------------------------
+HUNGER_DECAY_PER_HOUR = 2.0
+HAPPINESS_DECAY_PER_HOUR = 1.0
+HEALTH_DECAY_PER_HOUR = 0.5
+HEALTH_DECAY_EXTREME_TEMP_BONUS = 5.0
+ENERGY_DECAY_PER_HOUR = 1.0
+ENERGY_REGEN_PER_HOUR = 5.0    # only between 22:00 and 06:00 local
+
+# ---- Lifecycle --------------------------------------------------------------
+# Set DEVELOPMENT_SPEEDUP > 1 to compress the egg/baby/child/teen progression
+# for testing (e.g. 60 turns hours into minutes). 1 = real time.
+DEVELOPMENT_SPEEDUP = 1.0
 
 # ---- Persistence ------------------------------------------------------------
 STATE_FILE = "/root/tamagotchi-yoda/state.json"

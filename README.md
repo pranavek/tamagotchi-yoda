@@ -26,7 +26,7 @@ Every ~10 minutes the device wakes:
   - **Mind feed** — happiness drifts by the mood bucket (panic −15, fear −5, neutral 0, greed +10, euphoria +20); euphoria leaves a −5 health hangover on the next tick
   - **Fortune events fire** — Market Crash (score <20 or 24 h drop >30 pts), Bull Run (score >80 or 24 h rise >30 pts), Volatility Spike (>20 pt swing between fetches), Complacency (5+ consecutive neutral fetches)
   - **Aura overlay** — non-neutral moods paint a procedural aura around Yoda's silhouette
-- **Observation** — on every successful fetch Yoda has a 35 % chance of muttering a 3-word remark, picked from the (element × mood) quote matrix
+- **Observation** — on every successful fetch Yoda mutters a fresh 3-word remark picked from the (element × mood) quote matrix; the bubble stays up between fetches
 
 Energy regenerates between 22:00 and 06:00 local. Health below zero is fatal.
 
@@ -128,7 +128,6 @@ Edit `src/config.py`:
 - `LATITUDE` / `LONGITUDE` / `TIMEZONE` — pin Yoda's weather to your location
 - `WEATHER_FETCH_EVERY_N_TICKS` — how often to call Open-Meteo (default 6 ≈ 60 min)
 - `MARKET_FETCH_EVERY_N_TICKS` — how often to call alternative.me (default 24 ≈ 4 h)
-- `QUOTE_CHANCE` — probability per fetch that Yoda speaks (raise to 1.0 to force-test)
 - `HUNGER_DECAY_PER_HOUR` etc. — stat decay rates
 - `DEVELOPMENT_SPEEDUP` — compress the life cycle for testing
 - `POSE_DRIFT_MAX` — per-axis sway bound

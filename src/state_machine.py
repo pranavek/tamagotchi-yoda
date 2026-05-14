@@ -256,13 +256,12 @@ class YodaState:
         if newly_active:
             d["elements"] = events.xp_event_bonus(d["elements"], list(newly_active))
 
-        # Maybe pick an observation for Yoda to mutter, keyed by element and mood.
-        if random.random() < config.QUOTE_CHANCE:
-            text = observe(weather_element, d.get("market_mood", "neutral"))
-            if text:
-                d["observation_visible"] = True
-                d["observation_text"] = text
-                d["_just_observed"] = True
+        # Pick an observation for Yoda to mutter, keyed by element and mood.
+        text = observe(weather_element, d.get("market_mood", "neutral"))
+        if text:
+            d["observation_visible"] = True
+            d["observation_text"] = text
+            d["_just_observed"] = True
 
     # --------------------------------------------------------------- market
 
@@ -307,10 +306,9 @@ class YodaState:
         for k, v in fortune.per_fetch_active_deltas(d["fortune_state"].get("active", [])).items():
             d["stats"][k] = max(0.0, min(100.0, d["stats"][k] + v))
 
-        # If we don't already have a fresh observation from this tick, the
-        # market shift gets its own shot at producing one — keyed by current
-        # weather element + the new mood.
-        if not d.get("_just_observed") and random.random() < config.QUOTE_CHANCE:
+        # If weather didn't just pick a quote this tick, the market shift
+        # supplies one — keyed by current weather element + the new mood.
+        if not d.get("_just_observed"):
             elem = code_to_element((d["last_weather"] or {}).get("weathercode", 1))
             text = observe(elem, new_mood)
             if text:

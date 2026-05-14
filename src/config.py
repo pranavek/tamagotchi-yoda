@@ -27,7 +27,6 @@ DEBUG_DUMP_PNG = True
 # ---- Timing (seconds) -------------------------------------------------------
 MIN_TICK_INTERVAL = 540        # 9 minutes
 MAX_TICK_INTERVAL = 660        # 11 minutes
-QUOTE_CHANCE = 1.0             # 1.0 = quote refreshes on every fetch; lower for less chatter
 FULL_REFRESH_EVERY_N_TICKS = 10
 WEATHER_FETCH_EVERY_N_TICKS = 6   # ~60 min between Open-Meteo calls
 

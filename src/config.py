@@ -27,7 +27,7 @@ DEBUG_DUMP_PNG = True
 # ---- Timing (seconds) -------------------------------------------------------
 MIN_TICK_INTERVAL = 540        # 9 minutes
 MAX_TICK_INTERVAL = 660        # 11 minutes
-QUOTE_CHANCE = 0.35            # chance per weather fetch that Yoda speaks about it
+QUOTE_CHANCE = 1.0             # 1.0 = quote refreshes on every fetch; lower for less chatter
 FULL_REFRESH_EVERY_N_TICKS = 10
 WEATHER_FETCH_EVERY_N_TICKS = 6   # ~60 min between Open-Meteo calls
 
@@ -67,6 +67,15 @@ LATITUDE = 33.5207             # Birmingham, AL (spec example)
 LONGITUDE = -86.8025
 TIMEZONE = "America/Chicago"
 WEATHER_HTTP_TIMEOUT = 8
+
+# ---- Market API -------------------------------------------------------------
+# Crypto Fear & Greed Index (no auth, daily-updated, same 0-100 scale as CNN's
+# stock F&G). CNN's endpoint blocks datacenter IPs; this one is permissive.
+MARKET_URL = "https://api.alternative.me/fng/"
+MARKET_HTTP_TIMEOUT = 8
+MARKET_FETCH_EVERY_N_TICKS = 24    # ~4 h at 9-11 min ticks
+COMPLACENCY_FETCH_THRESHOLD = 5    # consecutive neutral-band fetches before Complacency fires
+EUPHORIA_HANGOVER_HEALTH_LOSS = 5.0
 
 # ---- Stat decay (per real-world hour) --------------------------------------
 HUNGER_DECAY_PER_HOUR = 2.0

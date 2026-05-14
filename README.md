@@ -1,20 +1,32 @@
 # tamagotchi-yoda
 
-A weather-driven ambient virtual pet on a Raspberry Pi Zero 2 W + Waveshare 2.13" e-ink HAT (V4).
+A weather- and market-driven ambient virtual pet on a Raspberry Pi Zero 2 W + Waveshare 2.13" e-ink HAT (V4).
 
-Yoda hatches once on first boot, ages from Egg → Baby → Child → Teen → Adult → Senior over a week of real time, and feeds on real-world weather pulled from the [Open-Meteo](https://open-meteo.com) forecast API. His mood, health, and elemental affinity are driven entirely by the weather above your latitude/longitude — no buttons, no inputs, no user-facing controls. The display refreshes every 15 minutes.
+Yoda hatches once on first boot, ages from Egg → Baby → Child → Teen → Adult → Senior over a week of real time, and lives on two real-world entropy sources:
+
+- **Weather** (cyclical, seasonal) pulled hourly from [Open-Meteo](https://open-meteo.com) — feeds the body: hunger, health, elemental XP.
+- **Market sentiment** (chaotic, emotional) pulled every ~4 h from the [Crypto Fear & Greed Index](https://alternative.me/crypto/fear-and-greed-index/) — feeds the mind: happiness, stress, the tone of his quotes, the aura around his silhouette.
+
+No buttons, no inputs, no user-facing controls. The display refreshes every ~10 minutes; the data fetches happen on boot and then on their own cadence.
 
 ## How he lives
 
-Every 15 minutes the device wakes:
+**On boot** Yoda fetches weather and market immediately so the first rendered frame already reflects reality. After that:
+
+Every ~10 minutes the device wakes:
 
 - Pose drifts ±2 px (gentle sway)
 - Stats decay (hunger, happiness, health, energy)
-- About every fourth tick (~60 min) Yoda fetches fresh weather and:
+- Every 6 ticks (~60 min) Yoda fetches fresh **weather** and:
   - **Stats feed** — hunger/happiness/health get topped up; the bonuses depend on which element the current weathercode maps to
   - **Elemental XP** — Fire / Water / Ice / Air / Storm / Shadow XP shifts (matching = +15, complementary = +5, opposing = −5, storms boost all six)
-  - **Events fire** — Drought (clear >48h), Heat Wave (>30°C for >24h), Deep Freeze (snow >24h), Fogbound (fog >12h), Storm Surge (any thunderstorm tick), Seasonal Bloom (first rain after 7+ dry days)
-  - **Observation** — Yoda mutters a 3-word weather remark in the speech bubble
+  - **Weather events fire** — Drought (clear >48h), Heat Wave (>30°C for >24h), Deep Freeze (snow >24h), Fogbound (fog >12h), Storm Surge (any thunderstorm tick), Seasonal Bloom (first rain after 7+ dry days)
+- Every 24 ticks (~4 h) Yoda fetches the **Crypto Fear & Greed Index** and:
+  - **Market mood** — score 0–100 buckets into panic / fear / neutral / greed / euphoria
+  - **Mind feed** — happiness drifts by the mood bucket (panic −15, fear −5, neutral 0, greed +10, euphoria +20); euphoria leaves a −5 health hangover on the next tick
+  - **Fortune events fire** — Market Crash (score <20 or 24 h drop >30 pts), Bull Run (score >80 or 24 h rise >30 pts), Volatility Spike (>20 pt swing between fetches), Complacency (5+ consecutive neutral fetches)
+  - **Aura overlay** — non-neutral moods paint a procedural aura around Yoda's silhouette
+- **Observation** — on every successful fetch Yoda has a 35 % chance of muttering a 3-word remark, picked from the (element × mood) quote matrix
 
 Energy regenerates between 22:00 and 06:00 local. Health below zero is fatal.
 
@@ -24,14 +36,24 @@ Energy regenerates between 22:00 and 06:00 local. Health below zero is fatal.
 +----------------------------------------------------+
 | H[##__] *[#___] +[####] Z[###_]            [Elem] | ← status bar
 |                                                    |
-|         (Yoda — sized by life stage)               |
+|         (Yoda — sized by life stage + mood aura)   |
 |                                ___________         |
 |                               | "Cold it" |        |
 |                               | "is, mmm" |        |
 |                                                    |
-| ADULT  Fire  Heat Wave                             | ← life-stage / event banner
+| ADULT  Fire  Heat Wave  Crash!                     | ← life-stage / weather event / fortune event
 +----------------------------------------------------+
 ```
+
+Mood auras (drawn around Yoda based on market mood):
+
+| Mood     | Aura visual |
+|----------|-------------|
+| panic    | jagged 1-px static scattered just outside the silhouette |
+| fear     | single downward droplet pixel above the head |
+| neutral  | nothing |
+| greed    | upward floating dots above the head |
+| euphoria | 8 radiating lines from sprite centre |
 
 ## Hardware
 
@@ -80,17 +102,19 @@ To watch a fast-forwarded life cycle without waiting a week, set `DEVELOPMENT_SP
 
 ```
 src/
-  main.py            entry, signal handlers, render-and-sleep loop
-  config.py          all tunables (location, cadences, decay rates)
+  main.py            entry, signal handlers, render-and-sleep loop, layout
+  config.py          all tunables (location, cadences, decay rates, URLs)
   display.py         Waveshare wrapper + MockEPD fallback
   sprite.py          45×55 Yoda (idle/blink/perked/egg) + scaled blit
-  state_machine.py   persistent JSON state, decay/feed/event orchestration
+  state_machine.py   persistent JSON state, boot fetch, tick orchestration
   weather.py         Open-Meteo client (urllib only — no external deps)
+  market.py          Crypto Fear & Greed Index client + mood bucketing
   stats.py           Hunger / Happiness / Health / Energy decay + feed
   elements.py        WMO code → element + XP affinity graph
   lifecycle.py       Egg / Baby / Child / Teen / Adult / Senior age gating
-  events.py          Drought / Heat Wave / Storm Surge / etc.
-  observations.py    Yoda-style 3-word weather mutterings
+  events.py          Weather events: Drought / Heat Wave / Storm Surge / etc.
+  fortune.py         Market events: Crash / Bull Run / Volatility / Complacency
+  observations.py    (element × mood) → 3-word Yoda-style remark matrix
 lib/waveshare_epd/   vendored Waveshare V4 driver
 tamagotchi-yoda.service systemd unit
 ```
@@ -102,8 +126,9 @@ State lives at `/root/tamagotchi-yoda/state.json` and survives reboots, so Yoda'
 Edit `src/config.py`:
 
 - `LATITUDE` / `LONGITUDE` / `TIMEZONE` — pin Yoda's weather to your location
-- `WEATHER_FETCH_EVERY_N_TICKS` — how often to call Open-Meteo (default every 4 ticks ≈ 60 min)
-- `QUOTE_CHANCE` — probability per weather fetch that Yoda speaks
+- `WEATHER_FETCH_EVERY_N_TICKS` — how often to call Open-Meteo (default 6 ≈ 60 min)
+- `MARKET_FETCH_EVERY_N_TICKS` — how often to call alternative.me (default 24 ≈ 4 h)
+- `QUOTE_CHANCE` — probability per fetch that Yoda speaks (raise to 1.0 to force-test)
 - `HUNGER_DECAY_PER_HOUR` etc. — stat decay rates
 - `DEVELOPMENT_SPEEDUP` — compress the life cycle for testing
 - `POSE_DRIFT_MAX` — per-axis sway bound

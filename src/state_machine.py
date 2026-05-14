@@ -16,9 +16,10 @@ import random
 from datetime import datetime, timezone
 from typing import Any, Callable, Optional
 
-from . import config, events, stats
+from . import config, events, fortune, stats
 from .elements import apply_xp, code_to_element, dominant
 from .lifecycle import stage_for
+from .market import market_mood
 from .observations import observe
 
 
@@ -47,6 +48,14 @@ DEFAULT_STATE: dict[str, Any] = {
     "event_state": None,      # populated by events.default_event_state() on first load
     "observation_visible": False,
     "observation_text": None,
+
+    "last_market": None,
+    "last_market_at": None,
+    "ticks_since_market_fetch": 0,
+    "market_mood": "neutral",
+    "prev_market_mood": "neutral",
+    "fortune_state": None,    # populated by fortune.default_state() on first load
+    "euphoria_hangover_due": False,
 
     "dead": False,
     "death_reason": None,
@@ -81,6 +90,8 @@ class YodaState:
             merged["stats"] = stats.default_stats()
         if merged.get("event_state") is None:
             merged["event_state"] = events.default_event_state()
+        if merged.get("fortune_state") is None:
+            merged["fortune_state"] = fortune.default_state()
         # Defensive: ensure all 6 element keys are present even on older state files.
         for k in ("fire", "water", "ice", "air", "storm", "shadow"):
             merged["elements"].setdefault(k, 0)
@@ -97,18 +108,28 @@ class YodaState:
 
     # ------------------------------------------------------------------ tick
 
-    def tick(self, fetch_weather: Optional[Callable[[], Optional[dict]]] = None) -> None:
+    def tick(
+        self,
+        fetch_weather: Optional[Callable[[], Optional[dict]]] = None,
+        fetch_market: Optional[Callable[[], Optional[dict]]] = None,
+    ) -> None:
         """Advance state by one wake cycle.
 
-        ``fetch_weather`` is injected so tests can mock the network. When
-        ``None``, weather fetches are skipped entirely (pet just decays).
+        ``fetch_weather`` and ``fetch_market`` are injected so tests can mock
+        the network. When ``None``, the corresponding refresh is skipped.
         """
         d = self.data
         d["ticks"] += 1
         d["ticks_since_fetch"] += 1
+        d["ticks_since_market_fetch"] += 1
         d["last_tick"] = _now_iso()
 
         elapsed_s = float(d.get("next_interval") or config.MIN_TICK_INTERVAL)
+
+        # Euphoria hangover: spec says health -5 *next tick* after a euphoria fetch.
+        if d.get("euphoria_hangover_due"):
+            d["stats"]["health"] = max(0.0, d["stats"]["health"] - config.EUPHORIA_HANGOVER_HEALTH_LOSS)
+            d["euphoria_hangover_due"] = False
 
         # Pose drift.
         limit = config.POSE_DRIFT_MAX
@@ -137,6 +158,13 @@ class YodaState:
         ):
             self._refresh_weather(fetch_weather)
 
+        # Optional market refresh.
+        if (
+            fetch_market is not None
+            and d["ticks_since_market_fetch"] >= config.MARKET_FETCH_EVERY_N_TICKS
+        ):
+            self._refresh_market(fetch_market)
+
         # Sprite variant: blink occasionally, perked if a fresh observation arrived this tick.
         if d.get("_just_observed"):
             d["sprite_variant"] = "perked"
@@ -160,11 +188,43 @@ class YodaState:
         d["next_interval"] = random.randint(config.MIN_TICK_INTERVAL, config.MAX_TICK_INTERVAL)
         self.save()
 
+    # ------------------------------------------------------------- boot helper
+
+    def boot_refresh(
+        self,
+        fetch_weather: Optional[Callable[[], Optional[dict]]] = None,
+        fetch_market: Optional[Callable[[], Optional[dict]]] = None,
+    ) -> None:
+        """Populate weather + market on startup before the first render.
+
+        Called once by ``main()`` before entering the tick loop. If either
+        fetch fails the engine falls back to the last cached value (which on
+        a fresh state file is ``None`` and just means the pet boots blind for
+        another cycle).
+        """
+        if fetch_weather is not None:
+            self._refresh_weather(fetch_weather)
+        if fetch_market is not None:
+            self._refresh_market(fetch_market)
+        self.save()
+
     # --------------------------------------------------------------- weather
+
+    def _seconds_since(self, last_at_iso: Optional[str]) -> float:
+        if not last_at_iso:
+            return 0.0
+        try:
+            last_at = datetime.fromisoformat(last_at_iso)
+        except ValueError:
+            return 0.0
+        if last_at.tzinfo is None:
+            last_at = last_at.replace(tzinfo=timezone.utc)
+        return max(0.0, (datetime.now(timezone.utc) - last_at).total_seconds())
 
     def _refresh_weather(self, fetch_weather: Callable[[], Optional[dict]]) -> None:
         d = self.data
         prev = d["last_weather"]
+        prev_at = d.get("last_weather_at")
         weather = fetch_weather()
         d["ticks_since_fetch"] = 0
         if weather is None:
@@ -181,28 +241,78 @@ class YodaState:
         weather_element = code_to_element(weather["weathercode"])
         d["elements"] = apply_xp(d["elements"], weather_element)
 
-        # Advance event streaks. Use the actual real-world seconds since the
-        # previous fetch — for the first fetch, treat it as one fetch-interval.
-        seconds_since_prev_fetch = config.WEATHER_FETCH_EVERY_N_TICKS * (
-            (config.MIN_TICK_INTERVAL + config.MAX_TICK_INTERVAL) / 2.0
-        )
+        # Advance event streaks by the real-world seconds since the previous
+        # fetch (or 0 on the very first boot, when there is no prior fetch).
+        seconds_since_prev_fetch = self._seconds_since(prev_at)
         previously_active = set(d["event_state"].get("active", []))
         d["event_state"] = events.update(d["event_state"], weather, seconds_since_prev_fetch)
         newly_active = set(d["event_state"].get("active", [])) - previously_active
 
-        # Apply one-shot stat deltas for events that just fired.
         for evt in newly_active:
             deltas = events.one_shot_deltas(evt)
             for k, v in deltas.items():
                 d["stats"][k] = min(100.0, d["stats"][k] + v)
 
-        # Element XP event bonus (one-time on newly-active events).
         if newly_active:
             d["elements"] = events.xp_event_bonus(d["elements"], list(newly_active))
 
-        # Maybe pick an observation for Yoda to mutter.
+        # Maybe pick an observation for Yoda to mutter, keyed by element and mood.
         if random.random() < config.QUOTE_CHANCE:
-            text = observe(weather_element)
+            text = observe(weather_element, d.get("market_mood", "neutral"))
+            if text:
+                d["observation_visible"] = True
+                d["observation_text"] = text
+                d["_just_observed"] = True
+
+    # --------------------------------------------------------------- market
+
+    def _refresh_market(self, fetch_market: Callable[[], Optional[dict]]) -> None:
+        d = self.data
+        prev_score = (d["last_market"] or {}).get("score")
+        market = fetch_market()
+        d["ticks_since_market_fetch"] = 0
+        if market is None:
+            log.info("market fetch failed; keeping last cached score")
+            return
+
+        d["last_market"] = market
+        d["last_market_at"] = _now_iso()
+
+        new_mood = market_mood(market["score"])
+        d["prev_market_mood"] = d.get("market_mood", "neutral")
+        d["market_mood"] = new_mood
+
+        # Per-fetch happiness drift from the mood bucket itself.
+        drift = fortune.mood_modifiers(new_mood, d["prev_market_mood"])
+        for k, v in drift.items():
+            d["stats"][k] = max(0.0, min(100.0, d["stats"][k] + v))
+
+        # Euphoria leaves a hangover that hits health on the next tick.
+        if fortune.euphoria_hangover_due(new_mood):
+            d["euphoria_hangover_due"] = True
+
+        # Fortune-event detection on the new score.
+        previously_active = set(d["fortune_state"].get("active", []))
+        d["fortune_state"] = fortune.update(
+            d["fortune_state"], market["score"], prev_score, market.get("fetched_at_iso") or _now_iso()
+        )
+        newly_active = set(d["fortune_state"].get("active", [])) - previously_active
+
+        for evt in newly_active:
+            deltas = fortune.one_shot_deltas(evt)
+            for k, v in deltas.items():
+                d["stats"][k] = max(0.0, min(100.0, d["stats"][k] + v))
+
+        # Per-fetch active deltas (e.g. complacency keeps draining happiness).
+        for k, v in fortune.per_fetch_active_deltas(d["fortune_state"].get("active", [])).items():
+            d["stats"][k] = max(0.0, min(100.0, d["stats"][k] + v))
+
+        # If we don't already have a fresh observation from this tick, the
+        # market shift gets its own shot at producing one — keyed by current
+        # weather element + the new mood.
+        if not d.get("_just_observed") and random.random() < config.QUOTE_CHANCE:
+            elem = code_to_element((d["last_weather"] or {}).get("weathercode", 1))
+            text = observe(elem, new_mood)
             if text:
                 d["observation_visible"] = True
                 d["observation_text"] = text

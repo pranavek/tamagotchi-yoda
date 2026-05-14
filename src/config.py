@@ -41,15 +41,16 @@ YODA_Y = 50
 
 # ---- Speech bubble ----------------------------------------------------------
 # A rounded rectangle with a chain of three tiny "thought" dots leading down
-# toward Yoda's head, instead of a fragile single-pixel pointer.
+# toward Yoda's head. Two lines: Yoda's quote on top, market readout below.
 BUBBLE_X = 100
-BUBBLE_Y = 20
+BUBBLE_Y = 18
 BUBBLE_W = 132
-BUBBLE_H = 34
+BUBBLE_H = 40
 BUBBLE_TEXT_X_PAD = 7
-BUBBLE_TEXT_Y_PAD = 11
+BUBBLE_TEXT_Y_PAD = 5
+BUBBLE_LINE_HEIGHT = 13
 # Dots are listed bubble-to-yoda. Each entry is (cx, cy, radius).
-BUBBLE_DOTS = ((92, 60, 3), (80, 70, 2), (70, 79, 1))
+BUBBLE_DOTS = ((92, 64, 3), (80, 73, 2), (70, 81, 1))
 
 # ---- Status bar (top edge) --------------------------------------------------
 STATUS_BAR_Y = 0

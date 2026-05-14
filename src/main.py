@@ -138,7 +138,18 @@ def _draw_aura(canvas: Image.Image, x: int, y: int, scale: float, mood: str) -> 
             draw.line((x0, y0, x1, y1), fill=0, width=1)
 
 
-def _draw_bubble(canvas: Image.Image, text: str, font) -> None:
+def _market_readout(state: YodaState) -> str:
+    """Compact second-line subtext: F&G score + mood bucket. Falls back to
+    element + mood if we haven't successfully fetched the market yet."""
+    market = state.data.get("last_market") or {}
+    mood = state.data.get("market_mood", "neutral")
+    score = market.get("score")
+    if score is not None:
+        return f"F&G {score} \xb7 {mood}"
+    return f"{state.dominant_element} \xb7 {mood}"
+
+
+def _draw_bubble(canvas: Image.Image, state: YodaState, text: str, font) -> None:
     draw = ImageDraw.Draw(canvas)
     x, y = config.BUBBLE_X, config.BUBBLE_Y
     w, h = config.BUBBLE_W, config.BUBBLE_H
@@ -153,12 +164,11 @@ def _draw_bubble(canvas: Image.Image, text: str, font) -> None:
     else:
         draw.rectangle((x, y, x + w, y + h), outline=0, fill=255, width=1)
 
-    draw.text(
-        (x + config.BUBBLE_TEXT_X_PAD, y + config.BUBBLE_TEXT_Y_PAD),
-        text,
-        font=font,
-        fill=0,
-    )
+    line_x = x + config.BUBBLE_TEXT_X_PAD
+    line1_y = y + config.BUBBLE_TEXT_Y_PAD
+    line2_y = line1_y + config.BUBBLE_LINE_HEIGHT
+    draw.text((line_x, line1_y), text, font=font, fill=0)
+    draw.text((line_x, line2_y), _market_readout(state), font=font, fill=0)
 
 
 def _draw_banner(canvas: Image.Image, state: YodaState, font) -> None:
@@ -197,7 +207,7 @@ def render_frame(state: YodaState, yoda: YodaSprite, font) -> Image.Image:
     yoda.blit_scaled(canvas, x, y, variant, scale)
 
     if state.data["observation_visible"] and state.data["observation_text"]:
-        _draw_bubble(canvas, state.data["observation_text"], font)
+        _draw_bubble(canvas, state, state.data["observation_text"], font)
 
     _draw_banner(canvas, state, font)
     return canvas

@@ -8,6 +8,7 @@ import logging
 import random
 import signal
 import sys
+import textwrap
 import time
 
 from PIL import Image, ImageDraw, ImageFont
@@ -171,6 +172,27 @@ def _draw_bubble(canvas: Image.Image, state: YodaState, text: str, font) -> None
     draw.text((line_x, line2_y), _market_readout(state), font=font, fill=0)
 
 
+def _draw_wisdom(canvas: Image.Image, text: str, font) -> None:
+    """Render the motivational sentence in the zone below the bubble.
+
+    Wraps to at most ``WISDOM_MAX_LINES`` lines of
+    ``WISDOM_MAX_CHARS_PER_LINE`` characters; the bank already keeps each
+    sentence short enough to never need more.
+    """
+    if not text:
+        return
+    draw = ImageDraw.Draw(canvas)
+    lines = textwrap.wrap(text, width=config.WISDOM_MAX_CHARS_PER_LINE) or [text]
+    lines = lines[: config.WISDOM_MAX_LINES]
+    for i, line in enumerate(lines):
+        draw.text(
+            (config.WISDOM_X + 2, config.WISDOM_Y + i * config.WISDOM_LINE_HEIGHT),
+            line,
+            font=font,
+            fill=0,
+        )
+
+
 def _draw_banner(canvas: Image.Image, state: YodaState, font) -> None:
     draw = ImageDraw.Draw(canvas)
     stage = state.data.get("stage", "egg")
@@ -209,6 +231,7 @@ def render_frame(state: YodaState, yoda: YodaSprite, font) -> Image.Image:
     if state.data["observation_visible"] and state.data["observation_text"]:
         _draw_bubble(canvas, state, state.data["observation_text"], font)
 
+    _draw_wisdom(canvas, state.data.get("wisdom_text") or "", font)
     _draw_banner(canvas, state, font)
     return canvas
 

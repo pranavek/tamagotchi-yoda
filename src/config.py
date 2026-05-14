@@ -58,6 +58,15 @@ STATUS_BAR_H = 14
 STAT_CELL_W = 52
 ELEMENT_GLYPH_X = 232
 
+# ---- Wisdom panel (below the bubble) ---------------------------------------
+# Rotating motivational line; updated on every weather / market fetch.
+WISDOM_X = 100
+WISDOM_Y = 62
+WISDOM_W = 132
+WISDOM_LINE_HEIGHT = 12
+WISDOM_MAX_CHARS_PER_LINE = 22
+WISDOM_MAX_LINES = 2
+
 # ---- Bottom banner (life stage / events) -----------------------------------
 BANNER_Y = 112
 
